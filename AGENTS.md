@@ -1,6 +1,6 @@
 # Agent guidance
 
-This project is a local semantic decision system built around `google/gemma-3-1b-it`.
+This project, **Semantic Judge**, is a local semantic decision system built around `google/gemma-3-1b-it`.
 
 ## Rules
 

@@ -1,8 +1,10 @@
-# Local Semantic Decision System
+# Semantic Judge
 
-A reproducible local system for making structured semantic decisions with the open-source instruction-tuned model [`google/gemma-3-1b-it`](https://huggingface.co/google/gemma-3-1b-it).
+**Runtime-defined zero-shot classification through constrained next-token logit scoring.**
 
-The system accepts evidence, a natural-language question, and a runtime-defined list of options. It scores short option labels using the model's next-token logits, selects the highest-scoring option, and returns structured metadata for auditing and reproduction.
+Semantic Judge is an open, local, reproducible decision engine built with the instruction-tuned model [`google/gemma-3-1b-it`](https://huggingface.co/google/gemma-3-1b-it).
+
+It accepts evidence, a natural-language question, and a runtime-defined list of options. It scores short option labels using the model's next-token logits, selects the highest-scoring option, and returns structured metadata for auditing and reproduction.
 
 ## Design goals
 
