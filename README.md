@@ -105,13 +105,37 @@ result = judge.classify(request)
 print(result.as_dict())
 ```
 
-The test scenarios exercise three common outcomes without downloading model weights:
+The test scenarios exercise common routing outcomes without downloading model weights:
 
 - urgent versus routine handling
-- routine handling when evidence is sufficient
-- abstention through an `Insufficient evidence` option
+- account access, billing, fraud, and technical support routing
+- deterministic option mapping and relative scoring
 
 These tests use deterministic fake logits to verify mapping and scoring mechanics. They do not measure Qwen quality; evaluate the real model on labeled scenarios before deployment.
+
+## Labeled evaluation corpus
+
+`data/evaluation_corpus.jsonl` contains 10 human-authored cases with expected option IDs and short rationales. It includes:
+
+- account access, billing, fraud, sales, technical support, privacy, and safety routing
+- high-risk safety and fraud cases
+- clear evidence cases with substantive routing labels
+
+The primary corpus intentionally does not include an `insufficient_evidence` option: every case forces a substantive route so option-selection quality can be measured directly. If a deployment needs abstention, callers should add an explicit policy option such as `human_review` or `escalate` to that request and evaluate it in a separate corpus.
+
+The `expected_choice` values are the gold labels for this corpus. They are evaluation targets, not model instructions embedded at runtime. Review and version the corpus when policy or routing definitions change.
+
+Run it against a loaded judge with:
+
+```python
+from semantic_judge import SemanticJudge, evaluate, load_corpus
+
+cases = load_corpus("data/evaluation_corpus.jsonl")
+report = evaluate(SemanticJudge.from_pretrained(), cases)
+print(report.as_dict())
+```
+
+The report includes exact-match accuracy, macro-F1, per-label precision/recall/F1, a confusion matrix, and every case's expected and predicted IDs. The corpus is intentionally small and illustrative; do not treat its score as a production quality claim. Add a separate held-out corpus before tuning prompts or thresholds against these cases.
 
 ## Project status
 
