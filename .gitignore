@@ -1,0 +1,59 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+dist/
+.eggs/
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+coverage.xml
+htmlcov/
+.tox/
+.nox/
+.venv/
+venv/
+env/
+ENV/
+
+# Packaging and local configuration
+*.env
+.env
+.env.*
+!.env.example
+*.local
+
+# Model weights, caches, and datasets
+.huggingface/
+.cache/
+.cache/huggingface/
+models/
+checkpoints/
+artifacts/
+data/raw/
+data/processed/
+*.safetensors
+*.bin
+*.pt
+*.pth
+*.onnx
+
+# Experiment outputs and logs
+runs/
+outputs/
+logs/
+*.log
+*.jsonl
+
+# Operating system and editor files
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp
+*.swo
