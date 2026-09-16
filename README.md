@@ -2,7 +2,7 @@
 
 **Runtime-defined zero-shot classification through constrained next-token logit scoring.**
 
-Semantic Judge is an open, local, reproducible decision engine built with the instruction-tuned model [`google/gemma-3-1b-it`](https://huggingface.co/google/gemma-3-1b-it).
+Semantic Judge is an open, local, reproducible decision engine built with [`Qwen/Qwen3-0.6B`](https://huggingface.co/Qwen/Qwen3-0.6B).
 
 It accepts evidence, a natural-language question, and a runtime-defined list of options. It scores short option labels using the model's next-token logits, selects the highest-scoring option, and returns structured metadata for auditing and reproduction.
 
@@ -61,7 +61,7 @@ The scores are conditional, relative scores over the options supplied in that re
     "sales": 0.5,
     "human_review": 1.1
   },
-  "model_name": "google/gemma-3-1b-it",
+  "model_name": "Qwen/Qwen3-0.6B",
   "model_revision": "<pinned revision>",
   "prompt_version": "<version>",
   "prompt_hash": "<sha256>",
@@ -70,6 +70,48 @@ The scores are conditional, relative scores over the options supplied in that re
   "score_notice": "Scores are uncalibrated relative model-preference scores."
 }
 ```
+
+## Quick start
+
+Create an isolated virtual environment, install the pinned dependencies, and install this package in editable mode:
+
+```bash
+python3.12 -m venv .venv
+source .venv/bin/activate  # Windows PowerShell: .venv\\Scripts\\Activate.ps1
+python -m pip install --upgrade pip
+python -m pip install -r requirements.txt
+python -m pip install --no-deps -e .
+python -m pytest -q
+```
+
+The model is downloaded from Hugging Face on the first real inference call and cached locally. If Hugging Face requests authentication, run `huggingface-cli login` first.
+
+```python
+from semantic_judge import ClassificationRequest, Option, SemanticJudge
+
+request = ClassificationRequest(
+    evidence="The customer lost access to the old authenticator after changing phones.",
+    question="What is the appropriate support route?",
+    options=(
+        Option("account_access", "Account access recovery"),
+        Option("billing", "Billing and payments"),
+        Option("human_review", "Escalate for human review"),
+    ),
+)
+
+judge = SemanticJudge.from_pretrained()
+# Default revision: c1899de289a04d12100db370d81485cdf75e47ca
+result = judge.classify(request)
+print(result.as_dict())
+```
+
+The test scenarios exercise three common outcomes without downloading model weights:
+
+- urgent versus routine handling
+- routine handling when evidence is sufficient
+- abstention through an `Insufficient evidence` option
+
+These tests use deterministic fake logits to verify mapping and scoring mechanics. They do not measure Qwen quality; evaluate the real model on labeled scenarios before deployment.
 
 ## Project status
 
@@ -115,4 +157,4 @@ A labeled evaluation set should measure:
 
 ## License and model terms
 
-Project licensing and dependency details will be added with the implementation. The Gemma model is subject to its own license and usage terms; review the model card and applicable terms before distribution or deployment.
+Project licensing and dependency details will be added with the implementation. The Qwen model is subject to its own license and usage terms; review the model card and applicable terms before distribution or deployment.
