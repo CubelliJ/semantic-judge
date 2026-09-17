@@ -8,5 +8,5 @@ numpy==2.5.3
 pytest==8.3.5
 
 # Optional quantized GGUF backend (Apple Silicon/Metal or CPU)
-# Install separately when using Qwen3-4B-Q4_K_M:
+# Install separately when using Qwen3-0.6B-Q4_K_M:
 # llama-cpp-python==0.3.16

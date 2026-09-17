@@ -13,9 +13,10 @@ import torch
 from .prompt import PROMPT_VERSION, build_prompt, labels_for, prompt_hash
 from .schemas import ClassificationRequest, ClassificationResult
 
-QUANTIZED_MODEL_NAME = "Qwen/Qwen3-4B-Q4_K_M-GGUF"
-QUANTIZED_MODEL_REPO = "Qwen/Qwen3-4B-GGUF"
-QUANTIZED_MODEL_FILE = "Qwen3-4B-Q4_K_M.gguf"
+QUANTIZED_MODEL_NAME = "Qwen/Qwen3-0.6B-Q4_K_M-GGUF"
+QUANTIZED_MODEL_REPO = "rippertnt/Qwen3-0.6B-Q4_K_M-GGUF"
+QUANTIZED_MODEL_FILE = "qwen3-0.6b-q4_k_m.gguf"
+QUANTIZED_MODEL_REVISION = "fa72ebc1225f63d0941770a1badf04594ddff6b7"
 
 _model_cache: dict[tuple[str, int, int], Any] = {}
 _model_locks: dict[tuple[str, int, int], threading.Lock] = {}
@@ -39,6 +40,7 @@ def get_quantized_model(
                     model_path = hf_hub_download(
                         repo_id=QUANTIZED_MODEL_REPO,
                         filename=QUANTIZED_MODEL_FILE,
+                        revision=QUANTIZED_MODEL_REVISION,
                     )
                 from llama_cpp import Llama
 

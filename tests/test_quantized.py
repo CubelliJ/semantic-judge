@@ -1,7 +1,14 @@
 import numpy as np
 import pytest
 
-from semantic_judge.quantized import QuantizedSemanticJudge, clear_quantized_model_cache
+from semantic_judge.quantized import (
+    QUANTIZED_MODEL_FILE,
+    QUANTIZED_MODEL_NAME,
+    QUANTIZED_MODEL_REPO,
+    QUANTIZED_MODEL_REVISION,
+    QuantizedSemanticJudge,
+    clear_quantized_model_cache,
+)
 from semantic_judge.schemas import ClassificationRequest, Option
 
 
@@ -31,6 +38,13 @@ def request():
         "Which route should handle this?",
         (Option("fraud", "Fraud"), Option("billing", "Billing")),
     )
+
+
+def test_default_quantized_model_is_pinned_0_6b_q4():
+    assert QUANTIZED_MODEL_NAME == "Qwen/Qwen3-0.6B-Q4_K_M-GGUF"
+    assert QUANTIZED_MODEL_REPO == "rippertnt/Qwen3-0.6B-Q4_K_M-GGUF"
+    assert QUANTIZED_MODEL_FILE == "qwen3-0.6b-q4_k_m.gguf"
+    assert QUANTIZED_MODEL_REVISION == "fa72ebc1225f63d0941770a1badf04594ddff6b7"
 
 
 def test_quantized_backend_scores_labels_and_latency():

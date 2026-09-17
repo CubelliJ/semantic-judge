@@ -86,15 +86,20 @@ python -m pytest -q
 
 The Transformers model is downloaded from Hugging Face on the first real inference call and cached locally. If Hugging Face requests authentication, run `huggingface-cli login` first.
 
-### Quantized Qwen3-4B backend
+### Quantized Qwen3-0.6B backend
 
-For a larger model on Apple Silicon, install the optional GGUF backend:
+For lower-latency classification on Apple Silicon, install the optional GGUF backend:
 
 ```bash
 CMAKE_ARGS="-DGGML_METAL=on" python -m pip install 'llama-cpp-python==0.3.16'
 ```
 
-Then load the Qwen3-4B Q4_K_M model. The GGUF file is downloaded lazily from [`Qwen/Qwen3-4B-GGUF`](https://huggingface.co/Qwen/Qwen3-4B-GGUF):
+Then load the Qwen3-0.6B Q4_K_M model. The pinned community GGUF file is downloaded lazily from [`rippertnt/Qwen3-0.6B-Q4_K_M-GGUF`](https://huggingface.co/rippertnt/Qwen3-0.6B-Q4_K_M-GGUF):
+
+```text
+Revision: fa72ebc1225f63d0941770a1badf04594ddff6b7
+File: qwen3-0.6b-q4_k_m.gguf
+```
 
 ```python
 from semantic_judge import QuantizedSemanticJudge
