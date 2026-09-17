@@ -61,6 +61,9 @@ def test_evaluation_report_metrics_and_callback():
     assert report.correct == 1
     assert report.accuracy == pytest.approx(1 / 3)
     assert report.macro_f1 == pytest.approx(1 / 3)
+    assert report.mean_latency_ms == pytest.approx(0.0)
+    assert report.p50_latency_ms == pytest.approx(0.0)
+    assert report.p95_latency_ms == pytest.approx(0.0)
     assert seen == [case.case_id for case in cases]
     assert report.confusion_matrix["account_access"]["account_access"] == 1
     assert report.confusion_matrix["billing"]["fraud"] == 1
@@ -68,6 +71,7 @@ def test_evaluation_report_metrics_and_callback():
         "case_id": cases[1].case_id,
         "expected": "billing",
         "predicted": "fraud",
+        "execution_time_ms": 0.0,
     }
 
 

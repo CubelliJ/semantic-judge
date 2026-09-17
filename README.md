@@ -84,7 +84,29 @@ python -m pip install --no-deps -e .
 python -m pytest -q
 ```
 
-The model is downloaded from Hugging Face on the first real inference call and cached locally. If Hugging Face requests authentication, run `huggingface-cli login` first.
+The Transformers model is downloaded from Hugging Face on the first real inference call and cached locally. If Hugging Face requests authentication, run `huggingface-cli login` first.
+
+### Quantized Qwen3-4B backend
+
+For a larger model on Apple Silicon, install the optional GGUF backend:
+
+```bash
+CMAKE_ARGS="-DGGML_METAL=on" python -m pip install 'llama-cpp-python==0.3.16'
+```
+
+Then load the Qwen3-4B Q4_K_M model. The GGUF file is downloaded lazily from [`Qwen/Qwen3-4B-GGUF`](https://huggingface.co/Qwen/Qwen3-4B-GGUF):
+
+```python
+from semantic_judge import QuantizedSemanticJudge
+
+judge = QuantizedSemanticJudge.from_pretrained(
+    n_ctx=4096,
+    n_gpu_layers=-1,  # offload all possible layers to Metal
+)
+result = judge.classify(request)
+```
+
+`get_quantized_model()` maintains one model instance per `(model_path, context size, GPU-layer setting)` in the process. Repeated `QuantizedSemanticJudge.from_pretrained()` calls with the same settings reuse that instance, avoiding duplicate model memory. Inference on the shared llama.cpp context is serialized with a lock; use multiple worker processes only if you intentionally want multiple model copies.
 
 ```python
 from semantic_judge import ClassificationRequest, Option, SemanticJudge
@@ -135,7 +157,7 @@ report = evaluate(SemanticJudge.from_pretrained(), cases)
 print(report.as_dict())
 ```
 
-The report includes exact-match accuracy, macro-F1, per-label precision/recall/F1, a confusion matrix, and every case's expected and predicted IDs. The corpus is intentionally small and illustrative; do not treat its score as a production quality claim. Add a separate held-out corpus before tuning prompts or thresholds against these cases.
+The report includes exact-match accuracy, macro-F1, per-label precision/recall/F1, a confusion matrix, every case's expected and predicted IDs, and `mean_latency_ms`, `p50_latency_ms`, and `p95_latency_ms`. Each prediction also records its individual `execution_time_ms`. The corpus is intentionally small and illustrative; do not treat its score as a production quality claim. Add a separate held-out corpus before tuning prompts or thresholds against these cases.
 
 ## Project status
 

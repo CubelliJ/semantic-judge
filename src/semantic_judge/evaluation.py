@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 from dataclasses import dataclass
 from pathlib import Path
+from statistics import mean
 from typing import Any, Callable, Iterable
 
 from .schemas import ClassificationRequest, ClassificationResult, Option
@@ -34,9 +35,12 @@ class EvaluationReport:
     correct: int
     accuracy: float
     macro_f1: float
+    mean_latency_ms: float
+    p50_latency_ms: float
+    p95_latency_ms: float
     per_label: dict[str, dict[str, int | float]]
     confusion_matrix: dict[str, dict[str, int]]
-    predictions: tuple[dict[str, str], ...]
+    predictions: tuple[dict[str, str | float], ...]
 
     def as_dict(self) -> dict[str, Any]:
         return {
@@ -44,6 +48,9 @@ class EvaluationReport:
             "correct": self.correct,
             "accuracy": self.accuracy,
             "macro_f1": self.macro_f1,
+            "mean_latency_ms": self.mean_latency_ms,
+            "p50_latency_ms": self.p50_latency_ms,
+            "p95_latency_ms": self.p95_latency_ms,
             "per_label": self.per_label,
             "confusion_matrix": self.confusion_matrix,
             "predictions": list(self.predictions),
@@ -82,7 +89,8 @@ def evaluate(
     cases = list(cases)
     if not cases:
         raise ValueError("at least one evaluation case is required")
-    predictions: list[dict[str, str]] = []
+    predictions: list[dict[str, str | float]] = []
+    latencies = []
     actual = []
     predicted = []
     for case in cases:
@@ -91,8 +99,14 @@ def evaluate(
             on_result(case, result)
         actual.append(case.expected_choice)
         predicted.append(result.choice)
+        latencies.append(result.execution_time_ms)
         predictions.append(
-            {"case_id": case.case_id, "expected": case.expected_choice, "predicted": result.choice}
+            {
+                "case_id": case.case_id,
+                "expected": case.expected_choice,
+                "predicted": result.choice,
+                "execution_time_ms": result.execution_time_ms,
+            }
         )
 
     labels = sorted(set(actual) | set(predicted))
@@ -118,15 +132,29 @@ def evaluate(
             "f1": f1,
         }
     correct = sum(expected == choice for expected, choice in zip(actual, predicted))
+    ordered_latencies = sorted(latencies)
     return EvaluationReport(
         total=len(cases),
         correct=correct,
         accuracy=correct / len(cases),
         macro_f1=sum(f1_values) / len(f1_values),
+        mean_latency_ms=mean(latencies),
+        p50_latency_ms=_percentile(ordered_latencies, 0.50),
+        p95_latency_ms=_percentile(ordered_latencies, 0.95),
         per_label=per_label,
         confusion_matrix=confusion,
         predictions=tuple(predictions),
     )
+
+
+def _percentile(values: list[float], fraction: float) -> float:
+    if len(values) == 1:
+        return values[0]
+    position = (len(values) - 1) * fraction
+    lower = int(position)
+    upper = min(lower + 1, len(values) - 1)
+    weight = position - lower
+    return values[lower] + (values[upper] - values[lower]) * weight
 
 
 def _case_from_dict(raw: dict[str, Any]) -> EvaluationCase:
