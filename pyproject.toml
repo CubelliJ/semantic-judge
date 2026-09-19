@@ -16,6 +16,10 @@ dependencies = [
 
 [project.optional-dependencies]
 test = ["pytest>=8,<9"]
+training = [
+  "datasets>=3,<4",
+  "peft>=0.14,<1",
+]
 quantized = ["llama-cpp-python==0.3.16"]
 
 [tool.setuptools.packages.find]
