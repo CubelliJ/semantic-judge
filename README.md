@@ -73,7 +73,17 @@ The scores are conditional, relative scores over the options supplied in that re
 
 ## Quick start
 
-Create an isolated virtual environment, install the pinned dependencies, and install this package in editable mode:
+The project uses a local Python virtual environment and a serial, process-wide cached model instance. The fastest setup is:
+
+```bash
+make init
+make install-quantized
+make test
+```
+
+`make init` creates `.venv` when needed and installs the pinned Python dependencies. `make install-quantized` builds `llama-cpp-python` with Metal support on Apple Silicon. The Qwen3-0.6B GGUF weights are downloaded lazily on the first quantized inference call and cached by Hugging Face locally.
+
+If you prefer manual setup:
 
 ```bash
 python3.12 -m venv .venv
@@ -81,13 +91,55 @@ source .venv/bin/activate  # Windows PowerShell: .venv\\Scripts\\Activate.ps1
 python -m pip install --upgrade pip
 python -m pip install -r requirements.txt
 python -m pip install --no-deps -e .
-python -m pytest -q
 ```
 
-The model is downloaded from Hugging Face on the first real inference call and cached locally. If Hugging Face requests authentication, run `huggingface-cli login` first.
+For the Transformers backend only, use `SemanticJudge.from_pretrained()`. For the recommended low-latency path, use `QuantizedSemanticJudge.from_pretrained()` after installing the optional llama.cpp dependency.
+
+If Hugging Face requests authentication, run `huggingface-cli login` first.
+
+### Make targets
+
+```text
+make help              Show available targets
+make init              Create the virtual environment and install dependencies
+make install           Install the package and test dependencies
+make install-quantized Build llama.cpp with Metal support
+make test              Run pytest
+make compile           Compile-check source and tests
+make check             Run tests, compilation, and git whitespace checks
+make evaluate          Evaluate the corpus with the default serial quantized backend
+make clean             Remove Python and pytest caches
+```
+
+### Quantized Qwen3-0.6B backend
+
+For lower-latency classification on Apple Silicon, install the optional GGUF backend:
+
+```bash
+CMAKE_ARGS="-DGGML_METAL=on" python -m pip install 'llama-cpp-python==0.3.16'
+```
+
+Then load the Qwen3-0.6B Q4_K_M model. The pinned community GGUF file is downloaded lazily from [`rippertnt/Qwen3-0.6B-Q4_K_M-GGUF`](https://huggingface.co/rippertnt/Qwen3-0.6B-Q4_K_M-GGUF):
+
+```text
+Revision: fa72ebc1225f63d0941770a1badf04594ddff6b7
+File: qwen3-0.6b-q4_k_m.gguf
+```
 
 ```python
-from semantic_judge import ClassificationRequest, Option, SemanticJudge
+from semantic_judge import QuantizedSemanticJudge
+
+judge = QuantizedSemanticJudge.from_pretrained(
+    n_ctx=4096,
+    n_gpu_layers=-1,  # offload all possible layers to Metal
+)
+result = judge.classify(request)
+```
+
+`get_quantized_model()` maintains one model instance per `(model_path, context size, GPU-layer setting)` in the process. Repeated `QuantizedSemanticJudge.from_pretrained()` calls with the same settings reuse that instance, avoiding duplicate model memory. Inference on the shared llama.cpp context is serialized with a lock; use multiple worker processes only if you intentionally want multiple model copies.
+
+```python
+from semantic_judge import ClassificationRequest, Option, QuantizedSemanticJudge
 
 request = ClassificationRequest(
     evidence="The customer lost access to the old authenticator after changing phones.",
@@ -99,31 +151,57 @@ request = ClassificationRequest(
     ),
 )
 
-judge = SemanticJudge.from_pretrained()
-# Default revision: c1899de289a04d12100db370d81485cdf75e47ca
+judge = QuantizedSemanticJudge.from_pretrained()
+# Default GGUF revision: fa72ebc1225f63d0941770a1badf04594ddff6b7
 result = judge.classify(request)
 print(result.as_dict())
 ```
 
-The test scenarios exercise three common outcomes without downloading model weights:
+The test scenarios exercise common routing outcomes without downloading model weights:
 
 - urgent versus routine handling
-- routine handling when evidence is sufficient
-- abstention through an `Insufficient evidence` option
+- account access, billing, fraud, and technical support routing
+- deterministic option mapping and relative scoring
 
 These tests use deterministic fake logits to verify mapping and scoring mechanics. They do not measure Qwen quality; evaluate the real model on labeled scenarios before deployment.
 
+## Labeled evaluation corpus
+
+`data/evaluation_corpus.jsonl` contains 10 human-authored cases with expected option IDs and short rationales. It includes:
+
+- account access, billing, fraud, sales, technical support, privacy, and safety routing
+- high-risk safety and fraud cases
+- clear evidence cases with substantive routing labels
+
+The primary corpus intentionally does not include an `insufficient_evidence` option: every case forces a substantive route so option-selection quality can be measured directly. If a deployment needs abstention, callers should add an explicit policy option such as `human_review` or `escalate` to that request and evaluate it in a separate corpus.
+
+The `expected_choice` values are the gold labels for this corpus. They are evaluation targets, not model instructions embedded at runtime. Review and version the corpus when policy or routing definitions change.
+
+Run it against a loaded judge with:
+
+```python
+from semantic_judge import SemanticJudge, evaluate, load_corpus
+
+cases = load_corpus("data/evaluation_corpus.jsonl")
+report = evaluate(SemanticJudge.from_pretrained(), cases)
+print(report.as_dict())
+```
+
+The report includes exact-match accuracy, macro-F1, per-label precision/recall/F1, a confusion matrix, every case's expected and predicted IDs, and `mean_latency_ms`, `p50_latency_ms`, and `p95_latency_ms`. Each prediction also records its individual `execution_time_ms`. The corpus is intentionally small and illustrative; do not treat its score as a production quality claim. Add a separate held-out corpus before tuning prompts or thresholds against these cases.
+
 ## Project status
 
-This repository is being built incrementally. The first implementation will focus on the direct scoring path:
+The current implementation provides the direct serial scoring path:
 
-1. Load the model and tokenizer.
-2. Validate requests.
-3. Construct the stable decision prompt.
-4. Extract and normalize label logits.
-5. Return reproducible structured output.
+1. Load a Transformers or quantized GGUF model.
+2. Reuse one quantized model instance per process configuration.
+3. Serialize access to the shared llama.cpp context.
+4. Validate requests and construct the stable decision prompt.
+5. Extract and normalize label logits.
+6. Return reproducible structured output with latency metadata.
+7. Evaluate labeled corpora with accuracy, macro-F1, confusion matrices, and latency percentiles.
 
-Evaluation, calibration, batching, caching, quantization, acceleration, and an HTTP API are later phases.
+Native multi-sequence batching was experimentally tested and was slower than serial inference for the project's short prompts, so serial inference remains the default. Calibration, larger held-out datasets, workflow evaluation, and a decision-specific trained head remain future work.
 
 ## Reproducibility
 

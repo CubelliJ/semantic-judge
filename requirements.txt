@@ -2,6 +2,11 @@
 # Qwen3 support requires a recent Transformers/tokenizers stack.
 torch==2.4.0
 transformers==4.51.3
+numpy==2.5.3
 
 # Test dependencies
 pytest==8.3.5
+
+# Optional quantized GGUF backend (Apple Silicon/Metal or CPU)
+# Install separately when using Qwen3-0.6B-Q4_K_M:
+# llama-cpp-python==0.3.16
