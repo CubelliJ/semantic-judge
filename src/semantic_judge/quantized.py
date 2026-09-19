@@ -10,7 +10,7 @@ from typing import Any
 import numpy as np
 import torch
 
-from .prompt import PROMPT_VERSION, build_prompt, labels_for, prompt_hash
+from .prompt import LABEL_POOL, PROMPT_VERSION, build_prompt, prompt_hash
 from .schemas import ClassificationRequest, ClassificationResult
 
 QUANTIZED_MODEL_NAME = "Qwen/Qwen3-0.6B-Q4_K_M-GGUF"
@@ -90,7 +90,7 @@ class QuantizedSemanticJudge:
         return cls(model, inference_lock=_model_locks[key])
 
     def classify(self, request: ClassificationRequest) -> ClassificationResult:
-        labels = labels_for(len(request.options))
+        labels = self._labels_for(len(request.options))
         prompt = build_prompt(request, labels)
         prompt_tokens = self.model.tokenize(prompt.encode("utf-8"), add_bos=True)
         label_ids = self._label_token_ids(labels)
@@ -121,6 +121,15 @@ class QuantizedSemanticJudge:
             input_token_count=len(prompt_tokens),
             execution_time_ms=elapsed_ms,
         )
+
+    def _labels_for(self, count: int) -> list[str]:
+        labels: list[str] = []
+        for label in LABEL_POOL:
+            if len(self.model.tokenize(label.encode("utf-8"), add_bos=False)) == 1:
+                labels.append(label)
+            if len(labels) == count:
+                return labels
+        raise ValueError(f"model tokenizer has fewer than {count} usable single-token labels")
 
     def _label_token_ids(self, labels: list[str]) -> list[int]:
         token_ids = []

@@ -4,13 +4,37 @@ import hashlib
 
 from .schemas import ClassificationRequest
 
-PROMPT_VERSION = "semantic-judge-v1"
+PROMPT_VERSION = "semantic-judge-v2-label-pool"
+
+
+LABEL_POOL = tuple("ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789")
 
 
 def labels_for(count: int) -> list[str]:
-    if count > 26:
-        raise ValueError("at most 26 options are supported")
-    return [chr(ord("A") + index) for index in range(count)]
+    """Return positional labels for an option set.
+
+    Labels are deliberately position-based. The runtime additionally verifies
+    that the selected labels are single tokenizer tokens before scoring them.
+    Stage 1 supports up to 36 labels; larger sets need sequence or hierarchical
+    scoring rather than a single next-token distribution.
+    """
+    if count < 2:
+        raise ValueError("at least two labels are required")
+    if count > len(LABEL_POOL):
+        raise ValueError(f"at most {len(LABEL_POOL)} options are supported")
+    return list(LABEL_POOL[:count])
+
+
+def tokenizer_labels(tokenizer: object, count: int) -> list[str]:
+    """Select ``count`` labels that are exactly one tokenizer token each."""
+    labels: list[str] = []
+    for label in LABEL_POOL:
+        ids = tokenizer(label, add_special_tokens=False)["input_ids"]
+        if len(ids) == 1:
+            labels.append(label)
+        if len(labels) == count:
+            return labels
+    raise ValueError(f"tokenizer has fewer than {count} usable labels encoded as exactly one token")
 
 
 def build_prompt(request: ClassificationRequest, labels: list[str]) -> str:

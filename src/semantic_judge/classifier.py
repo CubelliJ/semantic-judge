@@ -7,7 +7,7 @@ from typing import Any
 
 import torch
 
-from .prompt import PROMPT_VERSION, build_prompt, labels_for, prompt_hash
+from .prompt import PROMPT_VERSION, build_prompt, labels_for, prompt_hash, tokenizer_labels
 from .schemas import ClassificationRequest, ClassificationResult
 
 MODEL_NAME = "Qwen/Qwen3-0.6B"
@@ -39,7 +39,7 @@ class SemanticJudge:
         return cls(model, tokenizer, model_revision=resolved_revision)
 
     def classify(self, request: ClassificationRequest) -> ClassificationResult:
-        labels = labels_for(len(request.options))
+        labels = tokenizer_labels(self.tokenizer, len(request.options))
         prompt = build_prompt(request, labels)
         encoded = self.tokenizer(prompt, return_tensors="pt")
         input_ids = encoded["input_ids"]

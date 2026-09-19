@@ -19,6 +19,7 @@ test = ["pytest>=8,<9"]
 training = [
   "datasets>=3,<4",
   "peft>=0.14,<1",
+  "matplotlib>=3.8,<4",
 ]
 quantized = ["llama-cpp-python==0.3.16"]
 

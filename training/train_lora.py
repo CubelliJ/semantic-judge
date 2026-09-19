@@ -14,12 +14,13 @@ from pathlib import Path
 import torch
 
 from .data import load_huggingface_examples
-from .lora import collate, encode_example, evaluate_label_metrics
+from .data import TrainingExample
+from .lora import candidate_loss, collate, encode_example, evaluate_label_metrics
 
 
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--dataset", choices=("ag_news", "mnli", "boolq"), required=True)
+    parser.add_argument("--dataset", choices=("ag_news", "mnli", "boolq"), nargs="+", required=True)
     parser.add_argument("--model", default="Qwen/Qwen3-0.6B")
     parser.add_argument("--revision", default=None)
     parser.add_argument("--limit", type=int, default=5000)
@@ -62,18 +63,29 @@ def main() -> None:
     output_path = Path(args.output)
     output_path.mkdir(parents=True, exist_ok=True)
     loss_log_path = output_path / "microbatch_losses.jsonl"
-    train = load_huggingface_examples(args.dataset, split="train", limit=args.limit)
-    validation = load_huggingface_examples(args.dataset, split="test", limit=args.eval_limit)
+    train: list[TrainingExample] = []
+    validation: list[TrainingExample] = []
+    for dataset_name in args.dataset:
+        train.extend(load_huggingface_examples(dataset_name, split="train", limit=args.limit))
+        validation.extend(load_huggingface_examples(dataset_name, split="test", limit=args.eval_limit))
+    if len(args.dataset) > 1:
+        print({"datasets": args.dataset, "train_examples": len(train), "validation_examples": len(validation)})
     optimizer = torch.optim.AdamW(model.parameters(), lr=args.learning_rate, weight_decay=0.01)
     optimizer.zero_grad(set_to_none=True)
     with loss_log_path.open("w", encoding="utf-8") as loss_log:
         for epoch in range(args.epochs):
             random.shuffle(train)
-            steps = (len(train) + args.batch_size - 1) // args.batch_size
-            for batch_index, start in enumerate(range(0, len(train), args.batch_size)):
-                features = [encode_example(tokenizer, item, args.max_length) for item in train[start : start + args.batch_size]]
+            reordered_train = []
+            for example in train:
+                order = list(range(len(example.request.options)))
+                random.shuffle(order)
+                reordered_train.append(example.reordered(order))
+            steps = (len(reordered_train) + args.batch_size - 1) // args.batch_size
+            for batch_index, start in enumerate(range(0, len(reordered_train), args.batch_size)):
+                examples = reordered_train[start : start + args.batch_size]
+                features = [encode_example(tokenizer, item, args.max_length) for item in examples]
                 batch = {key: value.to(device) for key, value in collate(features, tokenizer).items()}
-                raw_loss = model(**batch).loss
+                raw_loss = candidate_loss(model, tokenizer, batch, examples, features)
                 loss = raw_loss / args.gradient_accumulation
                 loss.backward()
                 is_update = (batch_index + 1) % args.gradient_accumulation == 0 or batch_index + 1 == steps

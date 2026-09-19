@@ -13,7 +13,7 @@ class FakeTokenizer:
         self.split_labels = split_labels
 
     def __call__(self, value, return_tensors=None, add_special_tokens=True):
-        if isinstance(value, str) and len(value) == 1 and value.isalpha():
+        if isinstance(value, str) and len(value) == 1 and value.isalnum():
             if self.split_labels:
                 return {"input_ids": [ord(value), ord(value) + 1]}
             return {"input_ids": [ord(value)]}

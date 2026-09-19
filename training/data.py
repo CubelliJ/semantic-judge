@@ -31,6 +31,20 @@ class TrainingExample:
     def prompt(self) -> str:
         return build_prompt(self.request, labels_for(len(self.request.options)))
 
+    def reordered(self, order: list[int]) -> "TrainingExample":
+        """Return a copy with options reordered and the target label remapped."""
+        if sorted(order) != list(range(len(self.request.options))):
+            raise ValueError("order must be a permutation of option positions")
+        options = tuple(self.request.options[index] for index in order)
+        old_target_index = labels_for(len(self.request.options)).index(self.target)
+        new_target_index = order.index(old_target_index)
+        return TrainingExample(
+            example_id=self.example_id,
+            request=ClassificationRequest(self.request.evidence, self.request.question, options),
+            target=labels_for(len(options))[new_target_index],
+            source=self.source,
+        )
+
 
 def _example(
     example_id: str,

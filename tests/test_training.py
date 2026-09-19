@@ -1,7 +1,7 @@
 import torch
 
 from training.data import from_ag_news, from_boolq, from_mnli
-from training.lora import encode_example, evaluate_label_metrics
+from training.lora import candidate_loss, encode_example, evaluate_label_metrics
 
 
 class FakeTokenizer:
@@ -36,11 +36,29 @@ def test_adapters_use_runtime_options_and_labels():
     assert ag.prompt().endswith("Answer:")
 
 
+def test_reordered_examples_remap_target_label():
+    example = from_ag_news({"text": "A report about markets", "label": 2}, 0)
+    reordered = example.reordered([2, 0, 1, 3])
+    assert reordered.request.options[0].description == "Business news"
+    assert reordered.target == "A"
+
+
 def test_encode_masks_prompt_and_trains_only_target_token():
     example = from_boolq({"passage": "Water is wet.", "question": "Is water wet?", "answer": True}, 0)
     encoded = encode_example(FakeTokenizer(), example)
     assert encoded["labels"][:-1] == [-100] * (len(encoded["labels"]) - 1)
     assert encoded["labels"][-1] == 0
+
+
+def test_candidate_loss_uses_only_current_options():
+    from training.lora import collate
+
+    tokenizer = FakeTokenizer()
+    example = from_boolq({"passage": "Water is wet.", "question": "Is water wet?", "answer": True}, 0)
+    feature = encode_example(tokenizer, example)
+    batch = collate([feature], tokenizer)
+    loss = candidate_loss(FakeModel(), tokenizer, batch, [example], [feature])
+    assert float(loss) == torch.nn.functional.cross_entropy(torch.tensor([[2.0, 0.0]]), torch.tensor([0])).item()
 
 
 def test_evaluation_reports_nll_accuracy_and_macro_f1():

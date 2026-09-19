@@ -18,11 +18,45 @@ The adapters currently support:
 - `mnli` — entailment, contradiction, or neutral
 - `boolq` — yes/no reading comprehension
 
+A run can mix datasets with different numbers of options:
+
+```bash
+python -m training.train_lora \
+  --dataset ag_news mnli boolq \
+  --limit 2000 \
+  --eval-limit 500 \
+  --batch-size 1 \
+  --gradient-accumulation 8 \
+  --max-length 256 \
+  --output artifacts/mixed-classification
+```
+
 Datasets are downloaded and cached by Hugging Face when the command runs. They
 are not committed to this repository. Each record is rendered with the
 canonical `semantic_judge.prompt.build_prompt` function.
 
 ## Train
+
+The Makefile provides one command that creates the environment, installs the
+runtime and training dependencies, runs a mixed-dataset 10-epoch job, and
+writes a loss graph to `loss.png`:
+
+```bash
+make train
+```
+
+Defaults are 2,000 examples per source, 500 validation examples per source,
+10 epochs, 4 examples per microbatch, gradient accumulation of 2, and a
+maximum sequence length of 256. Override them without editing files:
+
+```bash
+make train TRAIN_LIMIT=200 TRAIN_EPOCHS=1 TRAIN_OUTPUT=artifacts/smoke
+```
+
+The default four-example microbatch reduces the variance of each gradient
+estimate compared with single-example updates. On a T4, reduce it to 1 or 2
+if memory is limited and increase `TRAIN_GRADIENT_ACCUMULATION` to preserve an
+effective batch size.
 
 Start with a small smoke run before spending compute:
 
@@ -36,8 +70,10 @@ python -m training.train_lora \
 ```
 
 A larger initial run can use 5,000 training records and two epochs. The default
-objective masks every prompt token and computes causal-language-model loss only
-on the correct one-token option label. The printed validation metrics are:
+objective masks every prompt token and computes cross-entropy only over the
+current example's candidate labels, rather than over the full vocabulary. Option
+order is shuffled each epoch and the target label is remapped safely. The
+printed validation metrics are:
 
 - `nll`: mean negative log likelihood of the correct option label
 - `accuracy`: exact option-label accuracy

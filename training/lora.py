@@ -8,6 +8,8 @@ from typing import Any, Iterable
 
 import torch
 
+from semantic_judge.prompt import tokenizer_labels
+
 from .data import TrainingExample
 
 
@@ -19,8 +21,14 @@ class TrainingMetrics:
     count: int
 
 
+def candidate_label_ids(tokenizer: Any, count: int) -> tuple[list[str], list[int]]:
+    labels = tokenizer_labels(tokenizer, count)
+    ids = [int(tokenizer(label, add_special_tokens=False)["input_ids"][0]) for label in labels]
+    return labels, ids
+
+
 def encode_example(tokenizer: Any, example: TrainingExample, max_length: int = 1024) -> dict[str, list[int]]:
-    """Encode one example with loss on only its single correct label token."""
+    """Encode one example; labels are metadata for candidate-only NLL."""
     prompt_ids = tokenizer(example.prompt(), add_special_tokens=True)["input_ids"]
     target_ids = tokenizer(example.target, add_special_tokens=False)["input_ids"]
     if len(target_ids) != 1:
@@ -33,6 +41,19 @@ def encode_example(tokenizer: Any, example: TrainingExample, max_length: int = 1
         "attention_mask": [1] * len(input_ids),
         "labels": [-100] * len(prompt_ids) + target_ids,
     }
+
+
+def candidate_loss(model: Any, tokenizer: Any, batch: dict[str, torch.Tensor], examples: list[TrainingExample], features: list[dict[str, list[int]]]) -> torch.Tensor:
+    """Compute mean cross-entropy over each example's candidate labels only."""
+    logits = model(input_ids=batch["input_ids"], attention_mask=batch["attention_mask"]).logits
+    losses = []
+    for row, (example, feature) in enumerate(zip(examples, features)):
+        position = len(feature["input_ids"]) - 2
+        option_labels, option_ids = candidate_label_ids(tokenizer, len(example.request.options))
+        scores = logits[row, position, option_ids]
+        target_index = option_labels.index(example.target)
+        losses.append(-torch.log_softmax(scores, dim=0)[target_index])
+    return torch.stack(losses).mean()
 
 
 def collate(features: list[dict[str, list[int]]], tokenizer: Any) -> dict[str, torch.Tensor]:
@@ -71,11 +92,8 @@ def evaluate_label_metrics(
             inputs = {key: torch.tensor([value], device=device) for key, value in encoded.items() if key != "labels"}
             # Causal LM logits at position t predict the token at t + 1.
             logits = model(**inputs).logits[0, len(encoded["input_ids"]) - 2]
-            labels = [chr(ord("A") + index) for index in range(len(example.request.options))]
-            label_ids = [tokenizer(label, add_special_tokens=False)["input_ids"] for label in labels]
-            if any(len(ids) != 1 for ids in label_ids):
-                raise ValueError("all option labels must encode as one token")
-            scores = [float(logits[ids[0]].item()) for ids in label_ids]
+            labels, label_ids = candidate_label_ids(tokenizer, len(example.request.options))
+            scores = [float(logits[token_id].item()) for token_id in label_ids]
             probabilities = torch.softmax(torch.tensor(scores, dtype=torch.float64), dim=0)
             losses.append(-math.log(max(float(probabilities[labels.index(example.target)]), 1e-30)))
             actual.append(example.target)
