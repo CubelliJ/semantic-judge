@@ -1,10 +1,19 @@
 .DEFAULT_GOAL := help
 
 PYTHON ?= python3
+ifneq ($(COLAB_RELEASE_TAG),)
+VENV ?= system
+else
 VENV ?= .venv
+endif
+ifeq ($(VENV),system)
+PY := $(PYTHON)
+PIP := $(PYTHON) -m pip
+else
 VENV_BIN := $(VENV)/bin
 PY := $(VENV_BIN)/python
 PIP := $(VENV_BIN)/pip
+endif
 
 .PHONY: help init install install-training install-quantized train plot-loss test compile check evaluate clean
 
@@ -32,16 +41,24 @@ help:
 	@echo "  make clean             Remove local Python/test caches"
 
 init:
+ifeq ($(VENV),system)
+	@$(MAKE) install
+else
 	@test -x "$(PY)" || $(PYTHON) -m venv "$(VENV)"
 	@$(MAKE) install
+endif
 
 install-training: init
 	@$(PIP) install -e '.[training]'
 
 install:
+ifeq ($(VENV),system)
+	@$(PIP) install --no-deps -e .
+else
 	@$(PIP) install --upgrade pip
 	@$(PIP) install -r requirements.txt
 	@$(PIP) install --no-deps -e .
+endif
 
 train: install-training
 	@$(PY) -m training.train_lora \
